@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dictation</title>
+<style>body{margin:0;padding:12px;background:transparent}</style>
+</head>
+<body>
+<!-- DICTATION WIDGET (Day 1): listen, type what you hear, get a score.
+     Edit the ITEMS list near the bottom to add, remove or change phrases. -->
+<div id="dk">
+  <style>
+    #dk{--ink:#1c2b3a;--mute:#5b6b7a;--bg:#f2f6f9;--line:#d5dee6;--acc:#0d7a85;--ok:#2e8b57;--bad:#d23f3f;
+      max-width:560px;margin:0 auto;padding:20px;background:var(--bg);border:1px solid var(--line);
+      border-radius:12px;font-family:system-ui,sans-serif;color:var(--ink);box-sizing:border-box}
+    #dk *{box-sizing:border-box}
+    #dk[hidden],#dk [hidden]{display:none!important}
+    #dk .title{font:700 22px Georgia,serif;margin:0 0 6px}
+    #dk .sub{font-size:15px;color:var(--mute);margin:0 0 16px;line-height:1.4}
+    #dk .prog{font-size:14px;color:var(--mute);margin:0 0 12px}
+    #dk .bar{height:6px;background:var(--line);border-radius:3px;margin:0 0 16px;overflow:hidden}
+    #dk .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
+    #dk button{font:600 15px system-ui,sans-serif;padding:9px 20px;border-radius:999px;border:1.5px solid var(--acc);
+      background:#fff;color:var(--acc);cursor:pointer}
+    #dk button:hover:not(:disabled){background:var(--acc);color:#fff}
+    #dk button.main{background:var(--acc);color:#fff}
+    #dk button.main:hover:not(:disabled){background:#0a646d}
+    #dk button:focus-visible,#dk input:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+    #dk button:disabled{opacity:.4;cursor:not-allowed}
+    #dk .listen{display:block;margin:0 auto 14px;font-size:17px;padding:12px 28px}
+    #dk .blanks{text-align:center;font:600 20px/1.3 Georgia,serif;letter-spacing:.12em;color:var(--mute);margin:0 0 12px;min-height:26px}
+    #dk input[type=text]{width:100%;font:18px system-ui,sans-serif;padding:11px 14px;border:1.5px solid var(--line);border-radius:12px;margin:0 0 12px}
+    #dk .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+    #dk .opt{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--mute);margin:14px 0 0;justify-content:center}
+    #dk .res{margin:14px 0 0;text-align:center}
+    #dk .score{font:700 34px Georgia,serif;margin:0}
+    #dk .score.good{color:var(--ok)} #dk .score.low{color:var(--bad)}
+    #dk .msg{font-size:15px;margin:4px 0 8px}
+    #dk .ans{font:700 20px Georgia,serif;margin:6px 0 2px}
+    #dk .missed{font-size:14px;color:var(--mute);margin:0 0 12px}
+    #dk .final{text-align:center}
+    #dk .big{font:700 48px Georgia,serif;margin:6px 0}
+  </style>
+
+  <div id="dk-start">
+    <p class="title">Dictation</p>
+    <p class="sub" id="dk-intro"></p>
+    <div class="row"><button type="button" class="main" id="dk-go">Start</button></div>
+  </div>
+
+  <div id="dk-play" hidden>
+    <p class="prog" id="dk-prog" aria-live="polite"></p>
+    <div class="bar"><i id="dk-bar"></i></div>
+    <button type="button" class="listen main" id="dk-listen">&#9654; Listen</button>
+    <p class="blanks" id="dk-blanks"></p>
+    <input type="text" id="dk-in" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Type what you hear" placeholder="Type what you hear...">
+    <div class="row">
+      <button type="button" class="main" id="dk-check">Check</button>
+      <button type="button" id="dk-next" hidden>Next</button>
+    </div>
+    <div class="res" id="dk-res" aria-live="polite" hidden>
+      <p class="score" id="dk-score"></p>
+      <p class="msg" id="dk-msg"></p>
+      <p class="ans" id="dk-ans"></p>
+      <p class="missed" id="dk-missed"></p>
+    </div>
+    <label class="opt"><input type="checkbox" id="dk-hint" checked> Show how many words</label>
+  </div>
+
+  <div id="dk-end" class="final" hidden>
+    <p class="title">Round complete!</p>
+    <p class="big" id="dk-avg"></p>
+    <p class="sub" id="dk-endmsg"></p>
+    <div class="row">
+      <button type="button" class="main" id="dk-again">Another round</button>
+    </div>
+  </div>
+
+  <script>
+  (function(){
+    // ===== EDIT HERE =====
+    var ROUND_SIZE = 8;     // how many phrases in each round
+    var PASS_MARK  = 80;    // % needed for the green message
+    var AUDIO_BASE = "/english-course/assets/day-01/audio/"; // folder with your recordings
+    var AUDIO_EXT  = ".m4a";                                   // extension of your recordings
+
+    // text: the phrase (shown after Check, and spoken by the browser voice if there is no recording)
+    // file: name of the recording WITHOUT the extension (leave "" to use the browser voice)
+    // alt:  optional list of other answers that should also count as correct
+    var ITEMS=[
+      {text:"Hello!",                 file:"01-hello"},
+      {text:"Hi, Noah.",              file:""},
+      {text:"Good morning!",          file:""},
+      {text:"What's your name?",      file:""},
+      {text:"I am Anna.",             file:"", alt:["I'm Anna."]},
+      {text:"My name is Emma.",       file:""},
+      {text:"Nice to meet you.",      file:""},
+      {text:"You too!",               file:""},
+      {text:"Welcome to New York.",   file:""},
+      {text:"Welcome to Coffee Talk.",file:""},
+      {text:"New book",  file:"new-book"},  {text:"Old book",  file:"old-book"},
+      {text:"New car",   file:"new-car"},   {text:"Old car",   file:"old-car"},
+      {text:"New house", file:"new-house"}, {text:"Old house", file:"old-house"},
+      {text:"New key",   file:"new-key"},   {text:"Old key",   file:"old-key"},
+      {text:"New pen",   file:"new-pen"},   {text:"Old pen",   file:"old-pen"},
+      {text:"New phone", file:"new-phone"}, {text:"Old phone", file:"old-phone"},
+      {text:"New shoes", file:"new-shoes"}, {text:"Old shoes", file:"old-shoes"}
+    ];
+    // =====================
+
+    //#GRADE-START
+    function norm(s){
+      return String(s).toLowerCase().replace(/[‘’]/g,"'").replace(/'/g,"")
+        .replace(/[^a-z0-9\s]/g," ").split(/\s+/).filter(Boolean);
+    }
+    function lcsMarks(exp,typ){
+      var n=exp.length,m=typ.length,dp=[],i,j,ok=[];
+      for(i=0;i<=n;i++){dp[i]=[];for(j=0;j<=m;j++)dp[i][j]=0}
+      for(i=1;i<=n;i++)for(j=1;j<=m;j++)
+        dp[i][j]=exp[i-1]===typ[j-1]?dp[i-1][j-1]+1:Math.max(dp[i-1][j],dp[i][j-1]);
+      for(i=0;i<n;i++)ok.push(false);
+      i=n;j=m;
+      while(i>0&&j>0){
+        if(exp[i-1]===typ[j-1]){ok[i-1]=true;i--;j--}
+        else if(dp[i-1][j]>=dp[i][j-1])i--;else j--;
+      }
+      return {ok:ok,hits:dp[n][m]};
+    }
+    function grade(expected,alts,typed){
+      var t=norm(typed),best=null;
+      [expected].concat(alts||[]).forEach(function(c){
+        var e=norm(c),r=lcsMarks(e,t),den=Math.max(e.length,t.length)||1,pct=Math.round(100*r.hits/den);
+        if(!best||pct>best.pct)best={pct:pct,words:e,ok:r.ok,cand:c};
+      });
+      return best;
+    }
+    //#GRADE-END
+
+    var $=function(i){return document.getElementById(i)};
+    var round=[],idx=0,scores=[],queue=[],graded=false,audio=null;
+
+    $("dk-intro").textContent="Listen and type what you hear. Each round has "+ROUND_SIZE+" phrases. Press Listen as many times as you need.";
+
+    function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}
+
+    // Draws phrases that were not used recently, so each new round feels different.
+    function draw(n){
+      var out=[],used={};
+      while(out.length<n&&out.length<ITEMS.length){
+        if(!queue.length)queue=shuffle(ITEMS.map(function(_,i){return i}));
+        var k=queue.shift();
+        if(used[k])continue;
+        used[k]=1;out.push(ITEMS[k]);
+      }
+      return shuffle(out);
+    }
+
+    function speak(text){
+      if(!("speechSynthesis" in window))return;
+      speechSynthesis.cancel();
+      var u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=0.8;speechSynthesis.speak(u);
+    }
+    function play(it){
+      if(audio){audio.pause();audio=null}
+      if("speechSynthesis" in window)speechSynthesis.cancel();
+      if(it.file){
+        var done=false,fb=function(){if(!done){done=true;speak(it.text)}};
+        audio=new Audio(AUDIO_BASE+it.file+AUDIO_EXT);
+        audio.onerror=fb;
+        var p=audio.play();if(p&&p.catch)p.catch(fb);
+        return;
+      }
+      speak(it.text);
+    }
+
+    function blanks(it){
+      var n=norm(it.text).length,s=[];for(var i=0;i<n;i++)s.push("___");return s.join("  ");
+    }
+    function show(id){["dk-start","dk-play","dk-end"].forEach(function(x){$(x).hidden=(x!==id)})}
+
+    function startRound(){
+      round=draw(ROUND_SIZE);idx=0;scores=[];show("dk-play");showPhrase();
+    }
+    function showPhrase(){
+      var it=round[idx];graded=false;
+      $("dk-prog").textContent="Phrase "+(idx+1)+" of "+round.length;
+      $("dk-bar").style.width=(idx/round.length*100)+"%";
+      $("dk-blanks").textContent=$("dk-hint").checked?blanks(it):"";
+      $("dk-in").value="";$("dk-in").disabled=false;
+      $("dk-check").hidden=false;$("dk-next").hidden=true;$("dk-res").hidden=true;
+      $("dk-next").textContent=(idx===round.length-1)?"See my score":"Next";
+      $("dk-in").focus();play(it);
+    }
+    function check(){
+      if(graded)return;
+      var it=round[idx],typed=$("dk-in").value;
+      if(!typed.trim()){$("dk-in").focus();return}
+      var g=grade(it.text,it.alt,typed);graded=true;scores.push(g.pct);
+      var sc=$("dk-score");sc.textContent=g.pct+"%";sc.className="score "+(g.pct>=PASS_MARK?"good":"low");
+      $("dk-msg").textContent=g.pct===100?"Perfect!":(g.pct>=PASS_MARK?"Very good!":"Keep practicing. Listen again and compare.");
+      $("dk-ans").textContent=g.cand;
+      var miss=[];g.words.forEach(function(w,i){if(!g.ok[i])miss.push(w)});
+      $("dk-missed").textContent=miss.length?("Missed: "+miss.join(", ")):"";
+      $("dk-res").hidden=false;$("dk-in").disabled=true;
+      $("dk-check").hidden=true;$("dk-next").hidden=false;$("dk-next").focus();
+    }
+    function next(){
+      if(idx<round.length-1){idx++;showPhrase();return}
+      var avg=Math.round(scores.reduce(function(a,b){return a+b},0)/scores.length);
+      $("dk-avg").textContent=avg+"%";
+      $("dk-endmsg").textContent=avg>=PASS_MARK?"Great work! Try another round with different phrases.":"Good practice. Try another round, you will improve.";
+      $("dk-bar").style.width="100%";show("dk-end");
+    }
+
+    $("dk-go").onclick=startRound;
+    $("dk-again").onclick=startRound;
+    $("dk-listen").onclick=function(){if(round[idx])play(round[idx]);$("dk-in").focus()};
+    $("dk-check").onclick=check;
+    $("dk-next").onclick=next;
+    $("dk-in").onkeydown=function(e){if(e.key==="Enter"){e.preventDefault();graded?next():check()}};
+    $("dk-hint").onchange=function(){if(round[idx]&&!graded)$("dk-blanks").textContent=this.checked?blanks(round[idx]):""};
+  })();
+  </script>
+</div>
+</body>
+</html>
