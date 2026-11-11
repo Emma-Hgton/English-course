@@ -166,7 +166,7 @@
       if("speechSynthesis" in window)speechSynthesis.cancel();
       if(it.file){
         var done=false,fb=function(){if(!done){done=true;speak(it.text)}};
-        audio=new Audio(AUDIO_BASE+it.file+AUDIO_EXT);
+        audio=new Audio(AUDIO_BASE+it.file+(/\.[a-z0-9]+$/i.test(it.file)?"":AUDIO_EXT));
         audio.onerror=fb;
         var p=audio.play();if(p&&p.catch)p.catch(fb);
         return;
