@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Say it</title>
+<style>body{margin:0;padding:12px;background:transparent}</style>
+</head><body>
+<!-- SAY IT WIDGET (multi-phrase): paste into a custom HTML/code block on your course platform.
+     Edit the PHRASES list near the bottom to add, remove or change rows. -->
+<div id="sayit">
+  <style>
+    #sayit{--ink:#1c2b3a;--mute:#5b6b7a;--bg:#f2f6f9;--line:#d5dee6;--acc:#0d7a85;--rec:#d23f3f;
+      max-width:640px;margin:0 auto;padding:16px 18px;background:var(--bg);border:1px solid var(--line);
+      border-radius:12px;font-family:system-ui,sans-serif;color:var(--ink);box-sizing:border-box}
+    #sayit *{box-sizing:border-box}
+    #sayit .title{font-size:15px;color:var(--mute);margin:0 0 6px}
+    #sayit .item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}
+    #sayit .txt{flex:1 1 180px;min-width:0}
+    #sayit .ph{font:700 20px/1.2 Georgia,serif;margin:0}
+    #sayit .sub{font-size:13px;color:var(--mute);margin:2px 0 0;min-height:16px}
+    #sayit .btns{display:flex;gap:6px;flex-wrap:wrap}
+    #sayit button{font:600 14px system-ui,sans-serif;padding:7px 14px;border-radius:999px;border:1.5px solid var(--acc);
+      background:#fff;color:var(--acc);cursor:pointer;white-space:nowrap}
+    #sayit button:hover:not(:disabled){background:var(--acc);color:#fff}
+    #sayit button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+    #sayit button:disabled{opacity:.4;cursor:not-allowed}
+    #sayit button.rec.on{background:var(--rec);border-color:var(--rec);color:#fff}
+    #sayit .msg{font-size:13px;color:var(--mute);margin:8px 0 0;min-height:16px}
+  </style>
+  <p class="title">Listen, then say it:</p>
+  <div id="sayit-list"></div>
+  <p class="msg" id="sayit-msg" aria-live="polite"></p>
+
+  <script>
+  (function(){
+    // ===== EDIT HERE =====
+    // text: the phrase | note: small hint (optional) | audio: link to your MP3 (optional; browser voice if empty)
+    var PHRASES=[
+      {text:"Hello!",               note:"Noah",  audio:""},
+      {text:"Good morning!",        note:"Emma",  audio:""},
+      {text:"My name is Noah.",     note:"Noah",  audio:""},
+      {text:"Nice to meet you.",    note:"Anna",  audio:""},
+      {text:"I'm new here.",        note:"Pablo", audio:""}
+    ];
+    // =====================
+
+    var list=document.getElementById("sayit-list"), msg=document.getElementById("sayit-msg"), active=null;
+
+    PHRASES.forEach(function(p){
+      var row=document.createElement("div"); row.className="item";
+      row.innerHTML='<div class="txt"><p class="ph"></p><p class="sub"></p></div>'+
+        '<div class="btns"><button type="button" class="ls">Listen</button>'+
+        '<button type="button" class="rec">Record</button>'+
+        '<button type="button" class="pl" disabled>Play my voice</button></div>';
+      row.querySelector(".ph").textContent=p.text;
+      row.querySelector(".sub").textContent=p.note||"";
+      list.appendChild(row);
+
+      var ls=row.querySelector(".ls"), rec=row.querySelector(".rec"), pl=row.querySelector(".pl"),
+          chunks=[], mr=null, audio=null, stream=null;
+
+      ls.onclick=function(){
+        if(p.audio){new Audio(p.audio).play().catch(function(){msg.textContent="Audio could not be played."});return}
+        if(!("speechSynthesis" in window)){msg.textContent="Listening is not supported in this browser.";return}
+        speechSynthesis.cancel();
+        var u=new SpeechSynthesisUtterance(p.text.replace(/[!.]/g,""));
+        u.lang="en-US";u.rate=0.8;speechSynthesis.speak(u);
+      };
+
+      rec.onclick=async function(){
+        if(mr&&mr.state==="recording"){mr.stop();return}
+        if(active&&active.state==="recording")active.stop(); // one recording at a time
+        if(!navigator.mediaDevices||!window.MediaRecorder){msg.textContent="Recording is not supported in this browser. Try Chrome, Edge, Safari or Firefox.";return}
+        try{stream=await navigator.mediaDevices.getUserMedia({audio:true})}
+        catch(e){msg.textContent="We can't use your microphone. Allow microphone access in your browser, then try again.";return}
+        chunks=[];mr=new MediaRecorder(stream);active=mr;
+        mr.ondataavailable=function(e){if(e.data.size)chunks.push(e.data)};
+        mr.onstop=function(){
+          stream.getTracks().forEach(function(t){t.stop()});
+          if(audio)URL.revokeObjectURL(audio.src);
+          audio=new Audio(URL.createObjectURL(new Blob(chunks,{type:mr.mimeType||"audio/webm"})));
+          rec.textContent="Record again";rec.classList.remove("on");pl.disabled=false;msg.textContent="";
+        };
+        mr.start();rec.textContent="Stop";rec.classList.add("on");pl.disabled=true;msg.textContent="Recording... say it now.";
+        setTimeout(function(){if(mr&&mr.state==="recording")mr.stop()},10000);
+      };
+
+      pl.onclick=function(){if(audio){audio.currentTime=0;audio.play()}};
+    });
+  })();
+  </script>
+</div>
+
+</body></html>

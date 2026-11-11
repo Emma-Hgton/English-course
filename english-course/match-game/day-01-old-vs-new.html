@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Match game</title>
+<style>body{margin:0;padding:12px;background:transparent}</style>
+</head><body>
+<!-- MATCH GAME WIDGET: paste into a custom HTML/code block on your course platform.
+     Edit the PAIRS list near the bottom to add or remove pairs. -->
+<div id="mg">
+  <style>
+    #mg{--ink:#1c2b3a;--mute:#5b6b7a;--bg:#f2f6f9;--line:#d5dee6;--acc:#0d7a85;--ok:#2e8b57;--bad:#d23f3f;
+      max-width:640px;margin:0 auto;padding:16px 18px;background:var(--bg);border:1px solid var(--line);
+      border-radius:12px;font-family:system-ui,sans-serif;color:var(--ink);box-sizing:border-box}
+    #mg *{box-sizing:border-box}
+    #mg .top{display:flex;justify-content:space-between;align-items:center;margin:0 0 12px;gap:10px}
+    #mg .title{font-size:15px;color:var(--mute);margin:0}
+    #mg .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+    #mg .card{aspect-ratio:1;border:2px solid var(--acc);border-radius:12px;background:var(--acc);cursor:pointer;padding:0;
+      display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:52px;transition:border-color .15s,transform .15s}
+    #mg .card .face{display:flex;align-items:center;justify-content:center;width:100%;height:100%;visibility:hidden}
+    #mg .card img{width:100%;height:100%;object-fit:cover;display:block}
+    #mg .card.up,#mg .card.done{background:#fff}
+    #mg .card.up .face,#mg .card.done .face{visibility:visible}
+    #mg .card:hover:not(.up):not(.done){background:#0a646d}
+    #mg .card:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+    #mg .card.up{box-shadow:0 0 0 3px rgba(13,122,133,.25)}
+    #mg .card.done{border-color:var(--ok);opacity:.55;cursor:default;position:relative}
+    #mg .card.done::after{content:"\2713";position:absolute;top:6px;right:8px;font:700 18px system-ui;color:var(--ok)}
+    #mg .card.bad{border-color:var(--bad);background:#fff;animation:sh .35s}
+    #mg .card.bad .face{visibility:visible}
+    @keyframes sh{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+    @media (prefers-reduced-motion:reduce){#mg .card.bad{animation:none}}
+    #mg button.again{font:600 14px system-ui,sans-serif;padding:7px 14px;border-radius:999px;border:1.5px solid var(--acc);
+      background:#fff;color:var(--acc);cursor:pointer}
+    #mg button.again:hover{background:var(--acc);color:#fff}
+    #mg button.again:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+    #mg .win{display:none;text-align:center;font:700 22px Georgia,serif;margin:14px 0 0;color:var(--ok)}
+    #mg .win.show{display:block}
+  </style>
+
+  <div class="top">
+    <p class="title">Flip two cards to find a pair.</p>
+    <button type="button" class="again" id="mg-again">Shuffle</button>
+  </div>
+  <div class="grid" id="mg-grid"></div>
+  <p class="win" id="mg-win">&#10003; Great job!</p>
+
+  <script>
+  (function(){
+    // ===== EDIT HERE =====
+    // Each pair = two cards that belong together (e.g. new house + old house).
+    // say:   what the learner hears when they tap the card (browser voice, or your MP3 if "audio" is set)
+    // img:   link to your picture (optional) | emoji: placeholder shown if there is no picture
+    // audio: link to your MP3 (optional)
+    var PAIRS=[
+      {a:{say:"New house", emoji:"\uD83C\uDFE0", img:"", audio:""},
+       b:{say:"Old house", emoji:"\uD83C\uDFDA\uFE0F", img:"", audio:""}},
+      {a:{say:"New phone", emoji:"\uD83D\uDCF1", img:"", audio:""},
+       b:{say:"Old phone", emoji:"\u260E\uFE0F", img:"", audio:""}},
+      {a:{say:"New shoes", emoji:"\uD83D\uDC5F", img:"", audio:""},
+       b:{say:"Old shoes", emoji:"\uD83E\uDD7E", img:"", audio:""}},
+      {a:{say:"New car", emoji:"\uD83D\uDE97", img:"", audio:""},
+       b:{say:"Old car", emoji:"\uD83D\uDE99", img:"", audio:""}}
+    ];
+    var PAIRS_PER_ROUND=0; // 0 = use all pairs; e.g. 3 = pick 3 random pairs each time
+    // =====================
+
+    var grid=document.getElementById("mg-grid"), win=document.getElementById("mg-win"),
+        sel=null, locked=false, left=0;
+
+    function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}
+
+    function play(c){
+      if(c.audio){new Audio(c.audio).play().catch(function(){});return}
+      if(!("speechSynthesis" in window))return;
+      speechSynthesis.cancel();
+      var u=new SpeechSynthesisUtterance(c.say);u.lang="en-US";u.rate=0.8;speechSynthesis.speak(u);
+    }
+
+    function start(){
+      grid.innerHTML="";win.classList.remove("show");sel=null;locked=false;
+      var set=shuffle(PAIRS.map(function(p,i){return {p:p,id:i}}));
+      if(PAIRS_PER_ROUND>0)set=set.slice(0,PAIRS_PER_ROUND);
+      left=set.length;
+      var cards=[];
+      set.forEach(function(s){cards.push({c:s.p.a,id:s.id});cards.push({c:s.p.b,id:s.id})});
+      shuffle(cards).forEach(function(o){
+        var el=document.createElement("button");el.type="button";el.className="card";
+        el.setAttribute("aria-label","Hidden card");
+        var face=document.createElement("span");face.className="face";
+        if(o.c.img){var im=document.createElement("img");im.src=o.c.img;im.alt="";face.appendChild(im)}
+        else face.textContent=o.c.emoji||"?";
+        el.appendChild(face);
+        el.onclick=function(){pick(el,o)};
+        grid.appendChild(el);
+      });
+    }
+
+    function pick(el,o){
+      if(locked||el.classList.contains("up")||el.classList.contains("done"))return;
+      el.classList.add("up");el.setAttribute("aria-label",o.c.say);play(o.c);
+      if(!sel){sel={el:el,id:o.id};return}
+      locked=true;var first=sel;sel=null;
+      setTimeout(function(){
+        if(first.el&&first.id===o.id){
+          first.el.className="card done";el.className="card done";left--;
+          if(left===0)win.classList.add("show");
+          locked=false;
+        }else{
+          first.el.className="card up bad";el.className="card up bad";
+          setTimeout(function(){
+            [first.el,el].forEach(function(x){x.className="card";x.setAttribute("aria-label","Hidden card")});
+            locked=false;
+          },500);
+        }
+      },900); // pause so the second sound can finish
+    }
+
+    document.getElementById("mg-again").onclick=start;
+    start();
+  })();
+  </script>
+</div>
+
+</body></html>
